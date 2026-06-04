@@ -1,6 +1,7 @@
-// 게임 설정
-const INITIAL_ALTITUDE = 52300; // 시작 높이 (미터)
-const INITIAL_SPEED = 100; // 초기 하강 속도 (미터/초)
+// ⚡ 게임 설정 (속도감 최우선!)
+const INITIAL_ALTITUDE = 523000; // 시작 높이 523,000m
+const INITIAL_SPEED = 150; // 초기 하강 속도 (미터/초) - UP!
+const ITEM_SPEED_MULTIPLIER = 1.3; // 아이템이 코알라보다 더 빠르게 떨어짐!
 
 // 게임 상태
 let gameState = {
@@ -11,6 +12,7 @@ let gameState = {
     gameRunning: true,
     speedMultiplier: 1,
     slowDownTimer: 0,
+    timePassed: 0, // 경과 시간 (하트 확률 증가용)
 };
 
 // DOM 요소
@@ -57,13 +59,26 @@ function createClouds() {
     }
 }
 
+// 아이템 비중 결정 (게임이 진행될수록 하트 확률 증가)
+function getItemType() {
+    const heartChance = Math.min(gameState.timePassed / 100, 0.2); // 최대 20% 하트 확률
+    const random = Math.random();
+    
+    if (random < heartChance) {
+        return 'heart';
+    } else if (random < heartChance + 0.5) {
+        return 'banana'; // 50%
+    } else {
+        return 'meteor'; // 50%
+    }
+}
+
 // 장애물 생성
 function createObstacle() {
     const obstacle = document.createElement('div');
     obstacle.className = 'obstacle';
     
-    const types = ['meteor', 'banana', 'heart'];
-    const type = types[Math.floor(Math.random() * types.length)];
+    const type = getItemType();
     obstacle.classList.add(type);
     
     let emoji;
@@ -92,12 +107,27 @@ function createObstacle() {
 
 let obstacles = [];
 
+// 말풍선 표시
+function showSpeechBubble(message) {
+    const bubble = document.createElement('div');
+    bubble.className = 'speech-bubble';
+    bubble.textContent = message;
+    bubble.style.left = playerX + 'px';
+    bubble.style.top = playerY - 60 + 'px';
+    gameArea.appendChild(bubble);
+    
+    setTimeout(() => bubble.remove(), 2000);
+}
+
 // 게임 루프
 function gameLoop() {
     if (!gameState.gameRunning) return;
 
-    // 속도 업데이트
-    gameState.speed = INITIAL_SPEED + (INITIAL_ALTITUDE - gameState.altitude) * 0.0005;
+    // 경과 시간 증가
+    gameState.timePassed += 0.016;
+
+    // 속도 업데이트 (중력 적용 + 더 빠르게!)
+    gameState.speed = INITIAL_SPEED + (INITIAL_ALTITUDE - gameState.altitude) * 0.001;
     gameState.speed *= gameState.speedMultiplier;
 
     // 높이 감소
@@ -117,23 +147,25 @@ function gameLoop() {
 
     // 플레이어 이동
     if (keyStates['ArrowLeft'] || keyStates['a'] || keyStates['A']) {
-        playerX = Math.max(0, playerX - 7);
+        playerX = Math.max(0, playerX - 10); // 더 빠른 이동
     }
     if (keyStates['ArrowRight'] || keyStates['d'] || keyStates['D']) {
-        playerX = Math.min(gameArea.clientWidth - 60, playerX + 7);
+        playerX = Math.min(gameArea.clientWidth - 60, playerX + 10);
     }
 
     player.style.left = playerX + 'px';
     player.style.top = playerY + 'px';
 
-    // 장애물 생성
-    if (Math.random() < 0.02) {
+    // 장애물 생성 (더 자주!)
+    if (Math.random() < 0.04) {
         obstacles.push(createObstacle());
     }
 
     // 장애물 업데이트
     obstacles = obstacles.filter(obs => {
-        obs.y += gameState.speed * gameState.speedMultiplier * 0.016;
+        // 아이템이 코알라보다 더 빠르게 떨어짐!
+        const itemSpeed = gameState.speed * gameState.speedMultiplier * ITEM_SPEED_MULTIPLIER;
+        obs.y += itemSpeed * 0.016;
         obs.element.style.top = obs.y + 'px';
 
         // 충돌 감지
@@ -175,15 +207,20 @@ function checkCollision(px, py, ox, oy) {
 // 충돌 처리
 function handleCollision(type) {
     if (type === 'meteor') {
+        // 운석: 부끄러운줄 알아야지!
+        showSpeechBubble('부끄러운줄 알아야지!');
         gameState.lives--;
         if (gameState.lives <= 0) {
             endGame();
         }
     } else if (type === 'banana') {
-        // 바나나: 나쁜 아이템 (속도 느려짐)
+        // 바나나: 속도 감소
+        showSpeechBubble('아 이것도...');
         gameState.speedMultiplier = 0.5;
         gameState.slowDownTimer = 5;
     } else if (type === 'heart') {
+        // 하트: 야 기분좋다!
+        showSpeechBubble('야 기분좋다!');
         gameState.lives++;
     }
 }
@@ -213,13 +250,14 @@ function endGame() {
     gameState.gameRunning = false;
 
     // 기록 저장
+    const now = new Date();
     highScores.push({
         score: gameState.score.toFixed(0),
-        date: new Date().toLocaleString('ko-KR')
+        date: now.toLocaleString('ko-KR')
     });
 
     highScores.sort((a, b) => parseInt(b.score) - parseInt(a.score));
-    highScores = highScores.slice(0, 10);
+    highScores = highScores.slice(0, 50); // 많은 기록 유지
 
     localStorage.setItem('koalaScores', JSON.stringify(highScores));
 
@@ -231,7 +269,7 @@ function endGame() {
     updateScoreList();
 }
 
-// 기록 목록 업데이트
+// 기록 목록 업데이트 (스코어 끊임없이 쭉 정리)
 function updateScoreList() {
     scoreList.innerHTML = '';
 
@@ -246,7 +284,7 @@ function updateScoreList() {
         scoreItem.innerHTML = `
             <span class="score-rank">#${index + 1}</span>
             <span class="score-value">${parseInt(score.score).toLocaleString('ko-KR')}m</span>
-            <div style="font-size: 12px; color: #888; margin-top: 5px;">${score.date}</div>
+            <div class="score-time">${score.date}</div>
         `;
         scoreList.appendChild(scoreItem);
     });
