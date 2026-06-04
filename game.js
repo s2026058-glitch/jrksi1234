@@ -180,6 +180,7 @@ function handleCollision(type) {
             endGame();
         }
     } else if (type === 'banana') {
+        // 바나나: 나쁜 아이템 (속도 느려짐)
         gameState.speedMultiplier = 0.5;
         gameState.slowDownTimer = 5;
     } else if (type === 'heart') {
